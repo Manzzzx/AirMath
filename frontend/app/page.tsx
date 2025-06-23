@@ -9,8 +9,6 @@ export default function HomePage() {
 
   return (
     <main className="max-w-3xl mx-auto px-4 py-8 text-white font-mono">
-      <h1 className="text-3xl font-bold mb-6 text-center">✋ AirMath</h1>
-
       <VideoCanvas
         wsUrl="ws://localhost:8000/ws"
         onResult={(expr, res) => {

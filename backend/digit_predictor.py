@@ -2,7 +2,6 @@ import tensorflow as tf
 import numpy as np
 import cv2
 
-# Load model saat import
 model = tf.keras.models.load_model("digit_model.h5")
 
 def predict_digit(image):

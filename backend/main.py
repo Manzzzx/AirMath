@@ -102,7 +102,6 @@ def camera_loop():
         frame = cv2.resize(frame, (640, 480))
         gesture, index_pos, frame = detect_gesture(frame)
         
-        # Reset drawing setiap frame
         drawing = False
 
         if gesture == "draw":
@@ -119,7 +118,6 @@ def camera_loop():
                 draw_points.clear()
             elif expr:
                 result = evaluate_expr(expr)
-        # "pause" dan lainnya tidak mengubah apa-apa
 
         if drawing and index_pos:
             draw_points.append(index_pos)
@@ -146,5 +144,4 @@ def camera_loop():
 
         time.sleep(1 / 30)
 
-# Run camera loop
 threading.Thread(target=camera_loop, daemon=True).start()
