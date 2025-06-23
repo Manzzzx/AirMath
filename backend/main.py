@@ -1,5 +1,7 @@
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from gesture_logic import detect_gesture
+from evaluator import evaluate_expr
 import cv2
 import base64
 import threading
@@ -39,9 +41,17 @@ async def websocket_endpoint(websocket: WebSocket):
         clients.remove(websocket)
         await websocket.close()
 
+# ====== VAR GLOBAL SHARED STATE ======
+drawing = False
+expr = ""
+result = ""
+draw_points = []
 
+# ====== CAMERA LOOP UTAMA ======
 def camera_loop():
+    global drawing, expr, result, draw_points
     cap = cv2.VideoCapture(0)
+
     if not cap.isOpened():
         print("❌ Kamera tidak tersedia.")
         return
@@ -52,25 +62,55 @@ def camera_loop():
             continue
 
         frame = cv2.resize(frame, (640, 480))
+        gesture, frame = detect_gesture(frame)
+
+        if gesture == "draw":
+            drawing = True
+        elif gesture == "pause":
+            drawing = False
+        elif gesture == "clear":
+            draw_points.clear()
+            expr = ""
+            result = ""
+        elif gesture == "fist" and expr:
+            result = evaluate_expr(expr)
+
+        # Ambil titik telunjuk (index finger)
+        img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        import mediapipe as mp
+        mp_hands = mp.solutions.hands
+        hands = mp_hands.Hands(static_image_mode=False, max_num_hands=1)
+        results = hands.process(img_rgb)
+
+        if results.multi_hand_landmarks:
+            lm = results.multi_hand_landmarks[0].landmark
+            index = lm[8]
+            h, w = frame.shape[:2]
+            cx, cy = int(index.x * w), int(index.y * h)
+
+            if drawing:
+                draw_points.append((cx, cy))
+
+        # Gambar coretan
+        for i in range(1, len(draw_points)):
+            cv2.line(frame, draw_points[i - 1], draw_points[i], (0, 255, 0), 4)
+
+        # Encode & kirim via WebSocket
         _, jpeg = cv2.imencode('.jpg', frame)
         b64 = base64.b64encode(jpeg.tobytes()).decode('utf-8')
 
-        # Buat data JSON
-        data = json.dumps({
-            "image": b64,
-            "expression": "2+3",
-            "result": "5"
-        })
-
-        # Kirim ke semua client pakai thread-safe method
         for ws in clients.copy():
             try:
-                asyncio.run_coroutine_threadsafe(ws.send_text(data), loop)
+                data = {
+                    "image": b64,
+                    "expression": expr,
+                    "result": result
+                }
+                asyncio.run_coroutine_threadsafe(ws.send_text(json.dumps(data)), loop)
             except:
                 pass
 
-        time.sleep(1/30)
+        time.sleep(1 / 30)
 
-
-# Start kamera di thread terpisah
+# Mulai thread kamera
 threading.Thread(target=camera_loop, daemon=True).start()
